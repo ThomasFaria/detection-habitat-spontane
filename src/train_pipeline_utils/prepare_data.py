@@ -1,5 +1,6 @@
 import os
 
+from typing import List
 import numpy as np
 import rasterio
 
@@ -99,43 +100,87 @@ def filter_images_sentinel2(list_images):
     return list_images
 
 
-def label_images(list_images, labeler):
+def label_images(list_images, labeler, task: str):
     """
-    labels the images according to type of labeler desired.
+    labels the images according to type of labeler and task desired.
 
     Args:
         list_images : the list containing the splitted and filtered data \
             to be labeled.
         labeler : a Labeler object representing the labeler \
             used to create segmentation labels.
+        task (str): task considered.
 
     Returns:
         list[SatelliteImage] : the list containing the splitted and \
             filtered data with a not-empty mask and the associated masks.
     """
-
     # print("Entre dans la fonction label_images")
-    list_masks = []
-    list_filtered_splitted_labeled_images = []
+    labels = []
+    images = []
 
     for satellite_image in list_images:
-        mask = labeler.create_segmentation_label(satellite_image)
-        if np.sum(mask) != 0:
-            list_filtered_splitted_labeled_images.append(satellite_image)
-            list_masks.append(mask)
+        label = labeler.create_label(satellite_image, task=task)
+        labels.append(label)
+        images.append(satellite_image)
 
-    # print(
-    #     "Nombre d'images labelisées : ",
-    #     len(list_filtered_splitted_labeled_images),
-    #     ", Nombre de masques : ",
-    #     len(list_masks),
-    # )
-    return list_filtered_splitted_labeled_images, list_masks
+    return images, labels
 
 
-def save_images_and_masks(list_images, list_masks, output_directory_name):
+def filter_buildingless(images: List, labels: List, task: str):
     """
-    write the couple images/masks into a specific folder.
+    Filter a list of images and associated labels to remove
+    buildingless images.
+
+    Args:
+        images : list containing images.
+        labels : list of corresponding labels.
+        task (str): task considered.
+    """
+    if task == "segmentation":
+        return filter_buildingless_segmentation(images, labels)
+    elif task == "detection":
+        return filter_buildingless_detection(images, labels)
+    else:
+        raise NotImplementedError("Task must be 'segmentation'"
+                                  "or 'detection'.")
+
+
+def filter_buildingless_segmentation(images: List, labels: List):
+    """
+    Filter a list of images and associated labels to remove
+    buildingless images for segmentation.
+
+    Args:
+        images : list containing images.
+        labels : list of corresponding labels.
+    """
+    filtered_images = []
+    filtered_labels = []
+
+    for image, label in zip(images, labels):
+        if np.sum(label) != 0:
+            filtered_images.append(image)
+            filtered_labels.append(label)
+
+    return filtered_images, filtered_labels
+
+
+def filter_buildingless_detection(images: List, labels: List):
+    """
+    Filter a list of images and associated labels to remove
+    buildingless images for detection.
+
+    Args:
+        images : list containing images.
+        labels : list of corresponding labels.
+    """
+    return images, labels
+
+
+def save_images_and_labels(list_images, list_labels, output_directory_name):
+    """
+    write the couple images/labels into a specific folder.
 
     Args:
         list_images : the list containing the splitted and filtered data \
@@ -150,17 +195,17 @@ def save_images_and_masks(list_images, list_masks, output_directory_name):
 
     # print("Entre dans la fonction save_images_and_masks")
     output_images_path = output_directory_name + "/images"
-    output_masks_path = output_directory_name + "/labels"
+    output_labels_path = output_directory_name + "/labels"
     i = 0
-    for image, mask in zip(list_images, list_masks):
+    for image, label in zip(list_images, list_labels):
         bb = image.bounds
         filename = str(int(bb[0])) + "_" + str(int(bb[1])) + "_" + str(i)
         i = i + 1
         try:
             image.to_raster(output_images_path, filename + ".jp2", "jp2", None)
             np.save(
-                output_masks_path + "/" + filename + ".npy",
-                mask,
+                output_labels_path + "/" + filename + ".npy",
+                label,
             )
 
         except rasterio._err.CPLE_AppDefinedError:

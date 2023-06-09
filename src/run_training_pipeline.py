@@ -26,13 +26,15 @@ from classes.optim.optimizer import generate_optimization_elements
 from data.components.change_detection_dataset import ChangeIsEverywhereDataset
 from data.components.dataset import PleiadeDataset
 from models.components.segmentation_models import DeepLabv3Module
+from models.components.detection_models import FasterRCNNModule
 from models.segmentation_module import SegmentationModule
 from train_pipeline_utils.download_data import load_satellite_data
 from train_pipeline_utils.prepare_data import (
     check_labelled_images,
     filter_images,
     label_images,
-    save_images_and_masks,
+    save_images_and_labels,
+    filter_buildingless
 )
 from utils.utils import update_storage_access
 
@@ -88,6 +90,7 @@ def prepare_data(config, list_data_dir):
     deps = config_data["dep"]
     src = config_data["source train"]
     labeler = config_data["type labeler"]
+    task = config_data["task"]
 
     list_output_dir = []
 
@@ -98,6 +101,8 @@ def prepare_data(config, list_data_dir):
             + src
             + "-"
             + labeler
+            + "-"
+            + task
             + "-"
             + dep
             + "-"
@@ -128,7 +133,7 @@ def prepare_data(config, list_data_dir):
                     )
 
                 except RasterioIOError:
-                    print("Errerur de lecture du fichier " + path)
+                    print("Erreur de lecture du fichier " + path)
                     continue
 
                 else:
@@ -141,9 +146,22 @@ def prepare_data(config, list_data_dir):
                     (
                         list_filtered_splitted_labeled_images,
                         list_masks,
-                    ) = label_images(list_filtered_splitted_images, labeler)
+                    ) = label_images(
+                        list_filtered_splitted_images,
+                        labeler,
+                        task
+                    )
 
-                    save_images_and_masks(
+                    (
+                        list_filtered_splitted_labeled_images,
+                        list_masks,
+                    ) = filter_buildingless(
+                        list_filtered_splitted_labeled_images,
+                        list_masks,
+                        task
+                    )
+
+                    save_images_and_labels(
                         list_filtered_splitted_labeled_images,
                         list_masks,
                         output_dir,
@@ -151,7 +169,7 @@ def prepare_data(config, list_data_dir):
 
         list_output_dir.append(output_dir)
         nb = len(os.listdir(output_dir + "/images"))
-        print(str(nb) + " couples images/masques retenus")
+        print(str(nb) + " couples images/labels retenus")
 
     return list_output_dir
 
@@ -295,7 +313,10 @@ def instantiate_model(config):
         object: Instance of the specified module.
     """
     module_type = config["optim"]["module"]
-    module_dict = {"deeplabv3": DeepLabv3Module}
+    module_dict = {
+        "deeplabv3": DeepLabv3Module,
+        "fasterrcnn": FasterRCNNModule
+    }
     nchannel = config["donnees"]["n channels train"]
 
     if module_type not in module_dict:
@@ -399,7 +420,7 @@ def run_pipeline(remote_server_uri, experiment_name, run_name):
         None
     """
     # Open the file and load the file
-    with open("../config.yml") as f:
+    with open("config.yml") as f:
         config = yaml.load(f, Loader=SafeLoader)
 
     list_data_dir = download_data(config)

@@ -50,6 +50,24 @@ class Labeler(ABC):
         """
         raise NotImplementedError()
 
+    def create_label(
+        self, satellite_image: SatelliteImage, task: str
+    ):
+        """
+        Create a label for a SatelliteImage.
+
+        Args:
+            satellite_image (SatelliteImage): Satellite image.
+            task (str): Task.
+        """
+        if task == "segmentation":
+            return self.create_segmentation_label(satellite_image)
+        elif task == "detection":
+            return self.create_detection_label(satellite_image)
+        else:
+            raise NotImplementedError("Task must be 'segmentation'"
+                                      "or 'detection'.")
+
     def create_detection_label(
         self, satellite_image: SatelliteImage
     ) -> List[Tuple[int]]:
