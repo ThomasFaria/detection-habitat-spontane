@@ -1,25 +1,18 @@
 """
+Detection Module.
 """
-import os
+import pytorch_lightning as pl
 from typing import Dict, Union
 
-import mlflow
-import numpy as np
-import pytorch_lightning as pl
 import torch
 from torch import nn, optim
-
-from classes.data.labeled_satellite_image \
-    import SegmentationLabeledSatelliteImage
-from classes.data.satellite_image import SatelliteImage
-from classes.optim.evaluation_model import calculate_IOU
-from utils.plot_utils import \
-    plot_list_segmentation_labeled_satellite_image
+from torchvision.models.detection._utils import Matcher
+from torchvision.ops.boxes import box_iou
 
 
-class SegmentationModule(pl.LightningModule):
+class DetectionModule(pl.LightningModule):
     """
-    Pytorch Lightning Module for DeepLabv3.
+    Pytorch Lightning Module for object detection.
     """
 
     def __init__(
@@ -56,14 +49,17 @@ class SegmentationModule(pl.LightningModule):
         self.scheduler_interval = scheduler_interval
         self.list_labeled_satellite_image = []
 
-    def forward(self, batch):
+    def forward(self, batch, targets=None):
         """
-        Perform forward-pass.
+        Perform forward-pass. Torchvision FasterRCNN returns the loss
+        during training and the boxes during eval.
+
         Args:
             batch (tensor): Batch of images to perform forward-pass.
         Returns (Tuple[tensor, tensor]): Table, Column prediction.
         """
-        return self.model(batch)
+        self.model.model.eval()
+        return self.model.model(batch)
 
     def training_step(self, batch, batch_idx):
         """
@@ -73,14 +69,19 @@ class SegmentationModule(pl.LightningModule):
             batch_idx (int): batch index.
         Returns: Tensor
         """
-        images, labels, dic = batch
+        images = batch[0]
 
-        output = self.forward(images)
-        loss = self.loss(output, labels)
+        targets = []
+        for boxes in batch[1]:
+            target = {}
+            target["boxes"] = boxes
+            target["labels"] = torch.ones(len(target["boxes"])).long()
+            targets.append(target)
 
-        self.log("train_loss", loss, on_epoch=True)
-
-        return loss
+        # fasterrcnn takes both images and targets for training, returns
+        loss_dict = self.model.model(images, targets)
+        loss = sum(loss for loss in loss_dict.values())
+        return {"loss": loss, "log": loss_dict}
 
     def validation_step(self, batch, batch_idx):
         """
@@ -90,16 +91,16 @@ class SegmentationModule(pl.LightningModule):
             batch_idx (int): batch index.
         Returns: Tensor
         """
-        images, labels, dic = batch
+        images, boxes, metadata = batch
+        pred_boxes = self.forward(images)
 
-        output = self.forward(images)
-        loss = self.loss(output, labels)
-        IOU = calculate_IOU(output, labels)
-
-        self.log("validation_IOU", IOU, on_epoch=True)
-        self.log("validation_loss", loss, on_epoch=True)
-
-        return loss
+        self.val_loss = torch.mean(
+            torch.stack(
+                [self.accuracy(b, pb["boxes"], iou_threshold=0.5) for b, pb in zip(boxes, pred_boxes)]
+            )
+        )
+        self.log("validation_loss", self.val_loss, on_epoch=True)
+        return self.val_loss
 
     def test_step(self, batch, batch_idx):
         """
@@ -109,18 +110,14 @@ class SegmentationModule(pl.LightningModule):
             batch_idx (int): batch index.
         Returns: Tensor
         """
-        images, labels, dic = batch
-        output = self.forward(images)
-
-        loss = self.loss(output, labels)
-        self.log("test_loss", loss, on_epoch=True)
-
-        IOU = calculate_IOU(output, labels)
-        self.log("test IOU", IOU, on_epoch=True)
-
-        self.evaluate_on_example(batch_idx, output, images, dic)
-
-        return IOU
+        images, boxes, metadata = batch
+        pred_boxes = self.forward(images)
+        self.test_loss = torch.mean(
+            torch.stack(
+                [self.accuracy(b, pb["boxes"], iou_threshold=0.5) for b, pb in zip(boxes, pred_boxes)]
+            )
+        )
+        return self.test_loss
 
     def configure_optimizers(self):
         """
@@ -153,37 +150,36 @@ class SegmentationModule(pl.LightningModule):
         Returns:
             None
         """
-        preds = torch.argmax(output, axis=1)
-        batch_size = images.shape[0]
+        raise NotImplementedError()
 
-        for idx in range(batch_size):
-            pthimg = dic["pathimage"][idx]
-            n_bands = images.shape[1]
-
-            satellite_image = SatelliteImage.from_raster(
-                file_path=pthimg, dep=None, date=None, n_bands=n_bands
+    def accuracy(self, src_boxes, pred_boxes, iou_threshold=1.):
+        """
+        Computes accuracy metric between true and predicted boxes.
+        """
+        total_gt = len(src_boxes)
+        total_pred = len(pred_boxes)
+        if total_gt > 0 and total_pred > 0:
+            # Define the matcher and distance matrix based on iou
+            matcher = Matcher(
+                iou_threshold,
+                iou_threshold,
+                allow_low_quality_matches=False
             )
-            satellite_image.normalize()
+            match_quality_matrix = box_iou(src_boxes, pred_boxes)
 
-            img_label_model = SegmentationLabeledSatelliteImage(
-                satellite_image, np.array(preds[idx].to("cpu")), "", None
-            )
+            results = matcher(match_quality_matrix)
+            true_positive = torch.count_nonzero(results.unique() != -1)
+            matched_elements = results[results > -1]
 
-            self.list_labeled_satellite_image.append(img_label_model)
-
-        if (batch_idx + 1) % batch_size == 0:
-            fig1 = plot_list_segmentation_labeled_satellite_image(
-                self.list_labeled_satellite_image, np.arange(n_bands)
-            )
-
-            if not os.path.exists("img/"):
-                os.makedirs("img/")
-
-            bounds = satellite_image.bounds
-            bottom = str(bounds[1])
-            right = str(bounds[2])
-
-            plot_file = "img/" + bottom + "_" + right + ".png"
-            fig1.savefig(plot_file)
-
-            mlflow.log_artifact(plot_file, artifact_path="plots")
+            # in Matcher, a predicted element can be matched only twice
+            false_positive = torch.count_nonzero(results == -1) + \
+                (len(matched_elements) - len(matched_elements.unique()))
+            false_negative = total_gt - true_positive
+            return true_positive / (true_positive + false_positive + false_negative)
+        elif total_gt == 0:
+            if total_pred > 0:
+                return torch.tensor(0.)
+            else:
+                return torch.tensor(1.)
+        elif total_gt > 0 and total_pred == 0:
+            return torch.tensor(0.)

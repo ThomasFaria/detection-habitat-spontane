@@ -8,7 +8,7 @@ class FasterRCNNModule(nn.Module):
     FasterRCNNModule.
     """
 
-    def __init__(self):
+    def __init__(self, nchannel=3):
         """
         Constructor
         """

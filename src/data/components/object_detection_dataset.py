@@ -25,7 +25,7 @@ class ObjectDetectionDataset(Dataset):
         self,
         list_paths_images: List[str],
         list_paths_labels: List[str],
-        transforms: Optional[Compose] = None,
+        transforms: Optional[Compose] = None
     ):
         """
         Constructor.
@@ -58,22 +58,25 @@ class ObjectDetectionDataset(Dataset):
 
         img = np.transpose(img.astype(float), [1, 2, 0])
 
-        # Getting labels
-        label = torch.tensor(np.load(pathlabel))
+        # Getting boxes
+        boxes = torch.tensor(np.load(pathlabel), dtype=torch.int64)
+        if len(boxes) == 0:
+            boxes = torch.zeros((0, 4), dtype=torch.int64)
 
         if self.transforms:
-            sample = self.transforms(image=img, label=label)
+            sample = self.transforms(
+                image=img,
+                bboxes=boxes,
+                class_labels=["building"]*len(boxes))
             img = sample["image"]
-            label = sample["label"]
+            boxes = sample["bboxes"]
         else:
             img = torch.tensor(img.astype(float))
             img = img.permute([2, 0, 1])
-            label = torch.tensor(label)
 
         img = img.type(torch.float)
-        label = label.type(torch.LongTensor)
         metadata = {"pathimage": pathim, "pathlabel": pathlabel}
-        return img, label, metadata
+        return img, boxes, metadata
 
     def __len__(self):
         return len(self.list_paths_images)

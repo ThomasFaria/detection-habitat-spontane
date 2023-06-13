@@ -25,6 +25,7 @@ from classes.optim.losses import CrossEntropy
 from classes.optim.optimizer import generate_optimization_elements
 from data.components.change_detection_dataset import ChangeIsEverywhereDataset
 from data.components.dataset import PleiadeDataset
+from data.components.object_detection_dataset import ObjectDetectionDataset
 from models.components.segmentation_models import DeepLabv3Module
 from models.components.detection_models import FasterRCNNModule
 from models.segmentation_module import SegmentationModule
@@ -193,6 +194,7 @@ def intantiate_dataset(config, list_path_images, list_path_labels):
     dataset_dict = {
         "pleiadeDataset": PleiadeDataset,
         "changeIsEverywhere": ChangeIsEverywhereDataset,
+        "object_detection": ObjectDetectionDataset
     }
 
     dataset_type = config["donnees"]["dataset"]
@@ -276,7 +278,8 @@ def intantiate_dataloader(config, list_output_dir):
     # on applique les transforms respectives
     augmentation = config["donnees"]["augmentation"]
     tile_size = config["donnees"]["tile size"]
-    t_aug, t_preproc = hd.generate_transform(tile_size, augmentation)
+    task = config["donnees"]["task"]
+    t_aug, t_preproc = hd.generate_transform(tile_size, augmentation, task)
     train_dataset.transforms = t_aug
     valid_dataset.transforms = t_preproc
 
@@ -289,6 +292,7 @@ def intantiate_dataloader(config, list_output_dir):
             batch_size=batch_size,
             shuffle=boolean,
             num_workers=2,
+            collate_fn=hd.collate_fn
         )
         for ds, boolean in zip([train_dataset, valid_dataset], [True, False])
     ]
