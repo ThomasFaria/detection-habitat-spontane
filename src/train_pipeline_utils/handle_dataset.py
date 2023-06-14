@@ -16,7 +16,7 @@ def instantiate_dataset_test(config):
 
 def split_dataset(dataset, prop_val):
     """
-    Splits a given dataset into training and 
+    Splits a given dataset into training and
     validation sets based on a given proportion.
 
     Args:
@@ -73,7 +73,10 @@ def generate_transform(tile_size, augmentation, task: str):
         if task == "detection":
             transforms_augmentation = album.Compose(
                 transforms_list,
-                bbox_params=album.BboxParams(format="pascal_voc", label_fields=['class_labels'])
+                bbox_params=album.BboxParams(
+                    format="pascal_voc",
+                    label_fields=['class_labels']
+                )
             )
         else:
             transforms_augmentation = album.Compose(
@@ -88,7 +91,10 @@ def generate_transform(tile_size, augmentation, task: str):
     if task == "detection":
         transforms_preprocessing = album.Compose(
             test_transforms_list,
-            bbox_params=album.BboxParams(format="pascal_voc", label_fields=['class_labels'])
+            bbox_params=album.BboxParams(
+                format="pascal_voc",
+                label_fields=['class_labels']
+            )
         )
     else:
         transforms_preprocessing = album.Compose(
