@@ -74,6 +74,11 @@ class ObjectDetectionDataset(Dataset):
             img = torch.tensor(img.astype(float))
             img = img.permute([2, 0, 1])
 
+        if len(boxes) > 0:
+            boxes = torch.stack([torch.tensor(item) for item in boxes])
+        else:
+            boxes = torch.zeros((0, 4), dtype=torch.int64)
+
         img = img.type(torch.float)
         metadata = {"pathimage": pathim, "pathlabel": pathlabel}
         return img, boxes, metadata

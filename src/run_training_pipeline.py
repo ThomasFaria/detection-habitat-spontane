@@ -29,6 +29,7 @@ from data.components.object_detection_dataset import ObjectDetectionDataset
 from models.components.segmentation_models import DeepLabv3Module
 from models.components.detection_models import FasterRCNNModule
 from models.segmentation_module import SegmentationModule
+from models.detection_module import DetectionModule
 from train_pipeline_utils.download_data import load_satellite_data
 from train_pipeline_utils.prepare_data import (
     check_labelled_images,
@@ -365,7 +366,13 @@ def instantiate_lightning_module(config, model):
     """
     list_params = generate_optimization_elements(config)
 
-    lightning_module = SegmentationModule(
+    task = config["donnees"]["task"]
+    lightning_module_dict = {
+        "detection": DetectionModule,
+        "segmentation": SegmentationModule
+    }
+
+    lightning_module = lightning_module_dict[task](
         model=model,
         loss=instantiate_loss(config),
         optimizer=list_params[0],

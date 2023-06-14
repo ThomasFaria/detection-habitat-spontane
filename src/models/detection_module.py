@@ -94,6 +94,12 @@ class DetectionModule(pl.LightningModule):
         images, boxes, metadata = batch
         pred_boxes = self.forward(images)
 
+        for b, pb in zip(boxes, pred_boxes):
+            print(b)
+            print(pb["boxes"])
+            print(type(b))
+            print(type(pb["boxes"]))
+
         self.val_loss = torch.mean(
             torch.stack(
                 [self.accuracy(b, pb["boxes"], iou_threshold=0.5) for b, pb in zip(boxes, pred_boxes)]
