@@ -393,12 +393,15 @@ def instantiate_trainer(config, lightning_module):
     Returns:
         SegmentationModule: A PyTorch Lightning module for segmentation.
     """
+    monitor = config["optim"]["monitor"]
+    mode = config["optim"]["mode"]
+    patience = config["optim"]["patience"]
     # def callbacks
     checkpoint_callback = ModelCheckpoint(
-        monitor="validation_loss", save_top_k=1, save_last=True, mode="max"
+        monitor=monitor, save_top_k=1, save_last=True, mode=mode
     )
     early_stop_callback = EarlyStopping(
-        monitor="validation_loss", mode="max", patience=3
+        monitor=monitor, mode=mode, patience=patience
     )
     lr_monitor = LearningRateMonitor(logging_interval="step")
     list_callbacks = [lr_monitor, checkpoint_callback, early_stop_callback]
@@ -430,11 +433,9 @@ def run_pipeline(remote_server_uri, experiment_name, run_name):
     with open("config.yml") as f:
         config = yaml.load(f, Loader=SafeLoader)
 
-    # list_data_dir = download_data(config)
-    # list_output_dir = prepare_data(config, list_data_dir)
-    list_output_dir = [
-        "/home/onyxia/work/detection-habitat-spontane/train_data_test"
-    ]
+    list_data_dir = download_data(config)
+    list_output_dir = prepare_data(config, list_data_dir)
+
     model = instantiate_model(config)
 
     train_dl, valid_dl, test_dl = intantiate_dataloader(
@@ -454,10 +455,10 @@ def run_pipeline(remote_server_uri, experiment_name, run_name):
         mlflow.end_run()
         mlflow.set_tracking_uri(remote_server_uri)
         mlflow.set_experiment(experiment_name)
-        # mlflow.pytorch.autolog()
+        mlflow.pytorch.autolog()
 
         with mlflow.start_run(run_name=run_name):
-            mlflow.log_artifact("../config.yml", artifact_path="config.yml")
+            mlflow.log_artifact("config.yml", artifact_path="config.yml")
             trainer.fit(light_module, train_dl, valid_dl)
             # trainer.test(light_module, test_dl)
     else:

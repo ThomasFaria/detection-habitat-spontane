@@ -6,7 +6,7 @@ def generate_optimization_elements(config):
     Returns the optimization elements required for PyTorch training.
 
     Args:
-        config (dict): The configuration dictionary 
+        config (dict): The configuration dictionary
         containing the optimization parameters.
 
     Returns:
@@ -21,10 +21,13 @@ def generate_optimization_elements(config):
         "momentum": config["optim"]["momentum"],
     }
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau
-    scheduler_params = {}
+    scheduler_params = {"monitor": config["optim"]["monitor"], "mode": "min"}
     scheduler_interval = "epoch"
 
-    return\
-        optimizer, optimizer_params,\
-        scheduler,  scheduler_params,\
-        scheduler_interval
+    return (
+        optimizer,
+        optimizer_params,
+        scheduler,
+        scheduler_params,
+        scheduler_interval,
+    )

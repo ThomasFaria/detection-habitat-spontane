@@ -83,6 +83,7 @@ class DetectionModule(pl.LightningModule):
         # fasterrcnn takes both images and targets for training, returns
         loss_dict = self.model.model(images, targets)
         loss = sum(loss for loss in loss_dict.values())
+        self.log("train_loss", loss)
         return {"loss": loss, "log": loss_dict}
 
     def validation_step(self, batch, batch_idx):
@@ -96,7 +97,7 @@ class DetectionModule(pl.LightningModule):
         images, boxes, metadata = batch
         pred_boxes = self.forward(images)
 
-        self.val_loss = torch.mean(
+        accuracy = torch.mean(
             torch.stack(
                 [
                     self.accuracy(b, pb["boxes"], iou_threshold=0.5)
@@ -104,8 +105,8 @@ class DetectionModule(pl.LightningModule):
                 ]
             )
         )
-        self.log("validation_loss", self.val_loss, on_epoch=True)
-        return self.val_loss
+        self.log("validation_accuracy", accuracy, on_epoch=True)
+        return accuracy
 
     def test_step(self, batch, batch_idx):
         """
@@ -117,7 +118,7 @@ class DetectionModule(pl.LightningModule):
         """
         images, boxes, metadata = batch
         pred_boxes = self.forward(images)
-        self.test_loss = torch.mean(
+        accuracy = torch.mean(
             torch.stack(
                 [
                     self.accuracy(b, pb["boxes"], iou_threshold=0.5)
@@ -125,18 +126,19 @@ class DetectionModule(pl.LightningModule):
                 ]
             )
         )
-        return self.test_loss
+        return accuracy
 
     def configure_optimizers(self):
         """
         Configure optimizer for pytorch lighting.
         Returns: optimizer and scheduler for pytorch lighting.
         """
+        monitor = self.scheduler_params.pop("monitor")
         optimizer = self.optimizer(self.parameters(), **self.optimizer_params)
         scheduler = self.scheduler(optimizer, **self.scheduler_params)
         scheduler = {
             "scheduler": scheduler,
-            "monitor": "validation_loss",
+            "monitor": monitor,
             "interval": self.scheduler_interval,
         }
 

@@ -17,8 +17,11 @@ optim:
   lr: 0.0001
   momentum: 0.9
   module: "fasterrcnn"
-  batch size: 1
+  batch size: 5
   max epochs: 5
-  val prop: 0.25
+  val prop: 0.2
+  monitor: "validation_accuracy"
+  mode: "min"
+  patience: 10
 
-mlflow: False
+mlflow: True
