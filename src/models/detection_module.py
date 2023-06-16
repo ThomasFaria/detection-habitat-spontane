@@ -1,9 +1,9 @@
 """
 Detection Module.
 """
-import pytorch_lightning as pl
 from typing import Dict, Union
 
+import pytorch_lightning as pl
 import torch
 from torch import nn, optim
 from torchvision.models.detection._utils import Matcher
@@ -75,7 +75,9 @@ class DetectionModule(pl.LightningModule):
         for boxes in batch[1]:
             target = {}
             target["boxes"] = boxes
-            target["labels"] = torch.ones(len(target["boxes"])).long()
+            target["labels"] = (
+                torch.ones(len(target["boxes"])).long().to(self.device)
+            )
             targets.append(target)
 
         # fasterrcnn takes both images and targets for training, returns
@@ -94,15 +96,12 @@ class DetectionModule(pl.LightningModule):
         images, boxes, metadata = batch
         pred_boxes = self.forward(images)
 
-        for b, pb in zip(boxes, pred_boxes):
-            print(b)
-            print(pb["boxes"])
-            print(type(b))
-            print(type(pb["boxes"]))
-
         self.val_loss = torch.mean(
             torch.stack(
-                [self.accuracy(b, pb["boxes"], iou_threshold=0.5) for b, pb in zip(boxes, pred_boxes)]
+                [
+                    self.accuracy(b, pb["boxes"], iou_threshold=0.5)
+                    for b, pb in zip(boxes, pred_boxes)
+                ]
             )
         )
         self.log("validation_loss", self.val_loss, on_epoch=True)
@@ -120,7 +119,10 @@ class DetectionModule(pl.LightningModule):
         pred_boxes = self.forward(images)
         self.test_loss = torch.mean(
             torch.stack(
-                [self.accuracy(b, pb["boxes"], iou_threshold=0.5) for b, pb in zip(boxes, pred_boxes)]
+                [
+                    self.accuracy(b, pb["boxes"], iou_threshold=0.5)
+                    for b, pb in zip(boxes, pred_boxes)
+                ]
             )
         )
         return self.test_loss
@@ -158,7 +160,7 @@ class DetectionModule(pl.LightningModule):
         """
         raise NotImplementedError()
 
-    def accuracy(self, src_boxes, pred_boxes, iou_threshold=1.):
+    def accuracy(self, src_boxes, pred_boxes, iou_threshold=1.0):
         """
         Computes accuracy metric between true and predicted boxes.
         """
@@ -167,9 +169,7 @@ class DetectionModule(pl.LightningModule):
         if total_gt > 0 and total_pred > 0:
             # Define the matcher and distance matrix based on iou
             matcher = Matcher(
-                iou_threshold,
-                iou_threshold,
-                allow_low_quality_matches=False
+                iou_threshold, iou_threshold, allow_low_quality_matches=False
             )
             match_quality_matrix = box_iou(src_boxes, pred_boxes)
 
@@ -178,14 +178,17 @@ class DetectionModule(pl.LightningModule):
             matched_elements = results[results > -1]
 
             # in Matcher, a predicted element can be matched only twice
-            false_positive = torch.count_nonzero(results == -1) + \
-                (len(matched_elements) - len(matched_elements.unique()))
+            false_positive = torch.count_nonzero(results == -1) + (
+                len(matched_elements) - len(matched_elements.unique())
+            )
             false_negative = total_gt - true_positive
-            return true_positive / (true_positive + false_positive + false_negative)
+            return true_positive / (
+                true_positive + false_positive + false_negative
+            )
         elif total_gt == 0:
             if total_pred > 0:
-                return torch.tensor(0.)
+                return torch.tensor(0.0)
             else:
-                return torch.tensor(1.)
+                return torch.tensor(1.0)
         elif total_gt > 0 and total_pred == 0:
-            return torch.tensor(0.)
+            return torch.tensor(0.0)

@@ -26,17 +26,17 @@ from classes.optim.optimizer import generate_optimization_elements
 from data.components.change_detection_dataset import ChangeIsEverywhereDataset
 from data.components.dataset import PleiadeDataset
 from data.components.object_detection_dataset import ObjectDetectionDataset
-from models.components.segmentation_models import DeepLabv3Module
 from models.components.detection_models import FasterRCNNModule
-from models.segmentation_module import SegmentationModule
+from models.components.segmentation_models import DeepLabv3Module
 from models.detection_module import DetectionModule
+from models.segmentation_module import SegmentationModule
 from train_pipeline_utils.download_data import load_satellite_data
 from train_pipeline_utils.prepare_data import (
     check_labelled_images,
+    filter_buildingless,
     filter_images,
     label_images,
     save_images_and_labels,
-    filter_buildingless
 )
 from utils.utils import update_storage_access
 
@@ -149,18 +149,14 @@ def prepare_data(config, list_data_dir):
                         list_filtered_splitted_labeled_images,
                         list_masks,
                     ) = label_images(
-                        list_filtered_splitted_images,
-                        labeler,
-                        task
+                        list_filtered_splitted_images, labeler, task
                     )
 
                     (
                         list_filtered_splitted_labeled_images,
                         list_masks,
                     ) = filter_buildingless(
-                        list_filtered_splitted_labeled_images,
-                        list_masks,
-                        task
+                        list_filtered_splitted_labeled_images, list_masks, task
                     )
 
                     save_images_and_labels(
@@ -195,7 +191,7 @@ def intantiate_dataset(config, list_path_images, list_path_labels):
     dataset_dict = {
         "pleiadeDataset": PleiadeDataset,
         "changeIsEverywhere": ChangeIsEverywhereDataset,
-        "object_detection": ObjectDetectionDataset
+        "object_detection": ObjectDetectionDataset,
     }
 
     dataset_type = config["donnees"]["dataset"]
@@ -292,8 +288,8 @@ def intantiate_dataloader(config, list_output_dir):
             ds,
             batch_size=batch_size,
             shuffle=boolean,
-            num_workers=2,
-            collate_fn=hd.collate_fn
+            num_workers=config["donnees"]["num_workers"],
+            collate_fn=hd.collate_fn,
         )
         for ds, boolean in zip([train_dataset, valid_dataset], [True, False])
     ]
@@ -320,7 +316,7 @@ def instantiate_model(config):
     module_type = config["optim"]["module"]
     module_dict = {
         "deeplabv3": DeepLabv3Module,
-        "fasterrcnn": FasterRCNNModule
+        "fasterrcnn": FasterRCNNModule,
     }
     nchannel = config["donnees"]["n channels train"]
 
@@ -369,7 +365,7 @@ def instantiate_lightning_module(config, model):
     task = config["donnees"]["task"]
     lightning_module_dict = {
         "detection": DetectionModule,
-        "segmentation": SegmentationModule
+        "segmentation": SegmentationModule,
     }
 
     lightning_module = lightning_module_dict[task](
@@ -434,9 +430,11 @@ def run_pipeline(remote_server_uri, experiment_name, run_name):
     with open("config.yml") as f:
         config = yaml.load(f, Loader=SafeLoader)
 
-    list_data_dir = download_data(config)
-    list_output_dir = prepare_data(config, list_data_dir)
-
+    # list_data_dir = download_data(config)
+    # list_output_dir = prepare_data(config, list_data_dir)
+    list_output_dir = [
+        "/home/onyxia/work/detection-habitat-spontane/train_data_test"
+    ]
     model = instantiate_model(config)
 
     train_dl, valid_dl, test_dl = intantiate_dataloader(

@@ -10,14 +10,15 @@ donnees:
   n bands: 3
   tile size: 250
   augmentation: True
+  num_workers: 5
 
 optim:
   loss: "crossentropy"
   lr: 0.0001
   momentum: 0.9
   module: "fasterrcnn"
-  batch size: 5
-  max epochs: 100
-  val prop: 0.2
+  batch size: 1
+  max epochs: 5
+  val prop: 0.25
 
 mlflow: False

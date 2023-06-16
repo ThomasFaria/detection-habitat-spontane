@@ -1,7 +1,7 @@
 import albumentations as album
+import torch
 from albumentations.pytorch.transforms import ToTensorV2
 from torch.utils.data import random_split
-import torch
 
 
 def instantiate_dataset_test(config):
@@ -29,13 +29,10 @@ def split_dataset(dataset, prop_val):
         A tuple containing the training and validation datasets.
 
     """
-    val_size = int(prop_val * len(dataset))
-    train_size = len(dataset) - val_size
+    dataset_list = random_split(dataset, [1 - prop_val, prop_val])
 
-    dataset_train, dataset_val = random_split(dataset, [train_size, val_size])
-
-    dataset_train = dataset_train.dataset
-    dataset_val = dataset_val.dataset
+    dataset_train = dataset_list[0]
+    dataset_val = dataset_list[1]
 
     return dataset_train, dataset_val
 
@@ -74,14 +71,11 @@ def generate_transform(tile_size, augmentation, task: str):
             transforms_augmentation = album.Compose(
                 transforms_list,
                 bbox_params=album.BboxParams(
-                    format="pascal_voc",
-                    label_fields=['class_labels']
-                )
+                    format="pascal_voc", label_fields=["class_labels"]
+                ),
             )
         else:
-            transforms_augmentation = album.Compose(
-                transforms_list
-            )
+            transforms_augmentation = album.Compose(transforms_list)
 
     test_transforms_list = [
         album.Resize(*image_size, always_apply=True),
@@ -92,14 +86,11 @@ def generate_transform(tile_size, augmentation, task: str):
         transforms_preprocessing = album.Compose(
             test_transforms_list,
             bbox_params=album.BboxParams(
-                format="pascal_voc",
-                label_fields=['class_labels']
-            )
+                format="pascal_voc", label_fields=["class_labels"]
+            ),
         )
     else:
-        transforms_preprocessing = album.Compose(
-            test_transforms_list
-        )
+        transforms_preprocessing = album.Compose(test_transforms_list)
 
     return transforms_augmentation, transforms_preprocessing
 
